@@ -129,3 +129,6 @@ dmypy.json
 .pyre/
 auth.json
 *.db
+
+# IDE Stuff
+.vscode

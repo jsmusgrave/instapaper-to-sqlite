@@ -30,6 +30,12 @@ By default, the `archive` folder is saved. You can specify a different folder wi
     $ instapaper-to-sqlite bookmarks instapaper.db --folder=unread
     $ instapaper-to-sqlite bookmarks instapaper.db --folder=starred
 
+## Saving Bookmark text
+
+You can pull down the article text for any articles currently in sqlite with. The presence of `--trace` will give you progress information. This–much like sync'ing your entire instapaper library–will take some time.
+
+    $ instapaper-to-sqlite get-text instapaper.db --trace
+
 ## Attribution
 
 This package is heavily inspired by [goodreads-to-sqlite](https://github.com/rixx/goodreads-to-sqlite/) by [Tobias Kunze

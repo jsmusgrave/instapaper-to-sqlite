@@ -2,8 +2,9 @@ import click
 import pathlib
 import json
 import sqlite_utils
+from datetime import datetime
 from instapaper_to_sqlite import utils
-from pyinstapaper.instapaper import Instapaper
+from pyinstapaper.instapaper import Instapaper, Bookmark
 
 
 @click.group()
@@ -64,8 +65,13 @@ BOOKMARK_KEYS = [
     "starred",
     "type",
     "private_source",
+    "folder"
 ]
 
+BOOKMARK_TEXT_KEYS = [
+    "bookmark_id",
+    "text",
+]
 
 @cli.command()
 @click.argument(
@@ -111,6 +117,71 @@ def bookmarks(db_path, auth, folder):
     for b in bookmarks:
         b.update({"folder": folder})
     db["bookmarks"].upsert_all(bookmarks, pk="bookmark_id", alter=True)
+
+@cli.command()
+@click.argument(
+    "db_path",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    required=True,
+)
+@click.option(
+    "-a",
+    "--auth",
+    type=click.Path(file_okay=True, dir_okay=False, allow_dash=False),
+    default="auth.json",
+    help="Path to save tokens to, defaults to auth.json",
+)
+@click.option(
+    "-t",
+    "--trace",
+    is_flag=True,
+    help="Option to print tracing",
+)
+def get_text(db_path, auth, trace):
+    """Download text for individual bookmarks"""
+    db = sqlite_utils.Database(db_path)
+    try:
+        data = json.load(open(auth))
+        consumer_id = data["instapaper_consumer_id"]
+        consumer_secret = data["instapaper_consumer_secret"]
+        login = data["instapaper_email"]
+        password = data["instapaper_password"]
+    except (KeyError, FileNotFoundError):
+        utils.error(
+            "Cannot find authentication data, please run `instapaper-to-sqlite auth`!"
+        )
+
+    # Create bookmark_text table if not exist table
+    db["bookmark_text"].create({
+    "bookmark_id": int,
+    "text": str,
+    "error": bool,
+        }, pk="bookmark_id", if_not_exists=True, foreign_keys=[("bookmark_id", "bookmarks", "bookmark_id")])
+    
+    # the_unpopulated_ids_query = "select b.bookmark_id, b.title from bookmarks b left join bookmark_text bt on b.bookmark_id = bt.bookmark_id where bt.text is null;"
+    the_unpopulated_ids_query = "select b.* from bookmarks b left join bookmark_text bt on b.bookmark_id = bt.bookmark_id where bt.text is null;"
+    unpopulated_ids = db.query(the_unpopulated_ids_query)
+    instapaper = Instapaper(consumer_id, consumer_secret)
+    instapaper.login(login, password)
+
+    if trace: print("Iterating through bookmarks...")
+    for row in unpopulated_ids:
+        isoDateToTimestap = lambda x : datetime.strptime(x, "%Y-%m-%dT%H:%M:%S").timestamp()
+        str_dict = {key: str(value) for key, value in row.items()}
+        str_dict["progress_timestamp"] = isoDateToTimestap(str_dict["progress_timestamp"])
+        str_dict["time"] =  isoDateToTimestap(str_dict["time"])
+
+        try :
+            if trace: print(f"Querying for bookmark_id: {str_dict['bookmark_id']} title: {str_dict['title']}")
+            bookmark = Bookmark(instapaper, **str_dict)
+            txt = bookmark.get_text()['data'].decode('utf-8')
+            db["bookmark_text"].insert({"bookmark_id":str_dict["bookmark_id"], "text":txt, "error":False})
+            if trace: print(f"Got response with text length of {len(txt)}")
+        except Exception as e:
+            print(f"Caught Exception querying bookmark {e}")
+            db["bookmark_text"].insert({"bookmark_id":str_dict["bookmark_id"], "text":"", "error":True})
+    if trace: print(f"Finished downloading text")
+
 
 
 if __name__ == "__main__":
