@@ -158,7 +158,6 @@ def get_text(db_path, auth, trace):
     "error": bool,
         }, pk="bookmark_id", if_not_exists=True, foreign_keys=[("bookmark_id", "bookmarks", "bookmark_id")])
     
-    # the_unpopulated_ids_query = "select b.bookmark_id, b.title from bookmarks b left join bookmark_text bt on b.bookmark_id = bt.bookmark_id where bt.text is null;"
     the_unpopulated_bookmarks_query = "select b.* from bookmarks b left join bookmark_text bt on b.bookmark_id = bt.bookmark_id where bt.text is null;"
     unpopulated_bookmarks = db.query(the_unpopulated_bookmarks_query)
     instapaper = Instapaper(consumer_id, consumer_secret)
